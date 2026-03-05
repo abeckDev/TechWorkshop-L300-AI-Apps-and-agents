@@ -1,50 +1,41 @@
-name: Build and Deploy to Azure Container Registry
+name: Deploy to Azure Container Registry
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 env:
-  # ── Configure these values ──────────────────────────────────
-  # Set these as GitHub repository variables or replace with your values
-  ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}   # e.g. myregistry.azurecr.io
-  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'techworkshop-ai-app' }}
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  IMAGE_NAME: chat-app
 
 jobs:
-  build-and-push:
-    name: Build & Push Docker Image
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ─── Checkout the repository ───────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ─── Log in to Azure Container Registry ────────────────
-      - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v2
-        with:
-          login-server: ${{ env.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      # ─── Write the ENV secret to a .env file ───────────────
-      # The file is created inside src/ so the Dockerfile's
-      # COPY .env .env picks it up.  The .gitignore already
-      # excludes .env, so it can never be committed.
       - name: Create .env file from secret
-        run: echo "${{ secrets.ENV }}" > src/.env
+        run: 'echo "$ENV" > src/.env'
+        shell: bash
+        env:
+          ENV: ${{ secrets.ENV }}
 
-      # ─── Build and push the Docker image ───────────────────
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+          username: ${{ secrets.AZURE_CONTAINER_REGISTRY_USERNAME }}
+          password: ${{ secrets.AZURE_CONTAINER_REGISTRY_PASSWORD }}
+
       - name: Build and push Docker image
         run: |
-          docker build \
-            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest \
-            ./src
-
-      - name: Push Docker image
-        run: |
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+          cd src/
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
