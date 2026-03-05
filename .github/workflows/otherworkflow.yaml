@@ -2,62 +2,44 @@ name: Deploy Customer Loyalty Agent
 
 on:
   push:
-    branches:
-      - main
+    # Paths include the initializer, prompt, workflow, and any associated tools
     paths:
       - 'src/app/agents/customerLoyaltyAgent_initializer.py'
-      - 'src/prompts/CustomerLoyaltyAgentPrompt.txt'
       - 'src/app/tools/discountLogic.py'
+      - 'src/prompts/CustomerLoyaltyAgentPrompt.txt'
+      - '.github/workflows/deploy-customer-loyalty-agent.yml'
+  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-permissions:
-  id-token: write   # Required for Azure OIDC login
-  contents: read
-
-env:
-  PYTHON_VERSION: '3.12'
-
 jobs:
-  deploy-loyalty-agent:
-    name: Initialize Customer Loyalty Agent
+  run-customer-loyalty-agent:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Create .env file from secret
+        run: 'echo "$ENV" > src/.env'
+        shell: bash
+        env:
+          ENV: ${{ secrets.ENV }}
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install azure-ai-projects \
-                      azure-identity \
-                      python-dotenv \
-                      pandas \
-                      openai \
-                      opentelemetry-api \
-                      azure-monitor-opentelemetry \
-                      azure-ai-agents \
-                      opentelemetry-instrumentation-openai-v2
+          pip install -r src/requirements.txt
 
-      - name: Azure Login
-        uses: Azure/login@v1
+      - name: Login via Azure CLI
+        uses: azure/login@v2.1.1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+            creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Run Customer Loyalty Agent Initializer
-        env:
-          FOUNDRY_ENDPOINT: ${{ secrets.FOUNDRY_ENDPOINT }}
-          gpt_deployment: ${{ secrets.GPT_DEPLOYMENT }}
-          gpt_endpoint: ${{ secrets.GPT_ENDPOINT }}
-          gpt_api_key: ${{ secrets.GPT_API_KEY }}
-          gpt_api_version: ${{ secrets.GPT_API_VERSION }}
-          APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
-          MCP_SERVER_URL: ${{ secrets.MCP_SERVER_URL }}
+      - name: Run customer loyalty agent initializer
         run: |
-          cd src
-          python -m app.agents.customerLoyaltyAgent_initializer
+          cd src/
+          python app/agents/customerLoyaltyAgent_initializer.py
